@@ -13,14 +13,14 @@ module ActionController
   #
   # First, if a template exists for the controller action, it is rendered.
   # This template lookup takes into account the action name, format, locales,
-  # handlers, variants etc.
+  # handlers, variants, etc.
   #
   # Second, if any templates exist for the controller action in any other
   # format, variant, etc. an <tt>ActionController::UnknownFormat</tt> is raised
   # because the available templates is assumed exhaustive. E.g. writing only an
   # HTML template means only that format is known.
   #
-  # Third and last, if the current request is a real "interactive" browser request,
+  # Third and last, if the current request is a real and "interactive" browser request,
   # <tt>ActionView::MissingTemplate</tt> is raised to display a helpful error
   # message.
   module ImplicitRender
@@ -32,9 +32,11 @@ module ActionController
       if template_exists?(action_name.to_s, _prefixes, variants: request.variant)
         return render(*args)
       elsif any_templates?(action_name.to_s, _prefixes)
+        formats = []; request.formats.each { |f| formats << f.to_s }
+
         raise ActionController::UnknownFormat, <<-eow.strip_heredoc
           #{self.class.name}\##{action_name} did not have any templates for the
-          formats #{request.formats} or variant #{request.variant}.
+          formats #{formats.join(', ')} or variant #{request.variant}.
         eow
       elsif interactive_browser_request?
         raise ActionView::MissingTemplate.new(<<-eow.strip_heredoc, action_name.to_s)
