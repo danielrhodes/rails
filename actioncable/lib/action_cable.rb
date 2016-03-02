@@ -30,7 +30,6 @@ module ActionCable
 
   INTERNAL = {
     message_types: {
-      welcome: 'welcome'.freeze,
       ping: 'ping'.freeze,
       confirmation: 'confirm_subscription'.freeze,
       rejection: 'reject_subscription'.freeze

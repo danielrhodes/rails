@@ -29,6 +29,7 @@ class ActionCable.Connection
       true
 
   close: ->
+    @consumer.connectionMonitor.stop()
     @webSocket?.close()
 
   reopen: ->
@@ -74,8 +75,6 @@ class ActionCable.Connection
     message: (event) ->
       {identifier, message, type} = JSON.parse(event.data)
       switch type
-        when message_types.welcome
-          @consumer.connectionMonitor.connected()
         when message_types.ping
           @consumer.connectionMonitor.ping()
         when message_types.confirmation
@@ -88,6 +87,7 @@ class ActionCable.Connection
     open: ->
       ActionCable.log("WebSocket onopen event")
       @disconnected = false
+      @consumer.connectionMonitor.connected()
       @consumer.subscriptions.reload()
 
     close: ->
@@ -101,4 +101,5 @@ class ActionCable.Connection
   disconnect: ->
     return if @disconnected
     @disconnected = true
+    @consumer.connectionMonitor.disconnected()
     @consumer.subscriptions.notifyAll("disconnected")

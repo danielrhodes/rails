@@ -6,19 +6,25 @@ class ActionCable.ConnectionMonitor
     max: 30
 
   @staleThreshold: 6 # Server::Connections::BEAT_INTERVAL * 2 (missed two pings)
+  @started = false
 
   constructor: (@consumer) ->
-    @start()
+    #
 
   connected: ->
-    @reset()
+    if !@started
+      @start()
+    else
+      @reset()
     @pingedAt = now()
     delete @disconnectedAt
     ActionCable.log("ConnectionMonitor connected")
 
   disconnected: ->
-    @disconnectedAt = now()
-
+    if @started
+      @disconnectedAt = now()
+      ActionCable.log("ConnectionMonitor disconnected")
+      
   ping: ->
     @pingedAt = now()
 
@@ -27,6 +33,7 @@ class ActionCable.ConnectionMonitor
     @consumer.connection.isOpen()
 
   start: ->
+    @started = true
     @reset()
     delete @stoppedAt
     @startedAt = now()
@@ -35,6 +42,7 @@ class ActionCable.ConnectionMonitor
     ActionCable.log("ConnectionMonitor started, pollInterval is #{@getInterval()}ms")
 
   stop: ->
+    @started = false
     @stoppedAt = now()
     document.removeEventListener("visibilitychange", @visibilityDidChange)
     ActionCable.log("ConnectionMonitor stopped")

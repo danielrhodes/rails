@@ -48,6 +48,8 @@ module ActionCable
       include InternalChannel
       include Authorization
 
+      class InvalidRequestError < StandardError; end
+
       attr_reader :server, :env, :subscriptions, :logger, :worker_pool
       delegate :stream_event_loop, :pubsub, to: :server
 
@@ -70,11 +72,19 @@ module ActionCable
       def process # :nodoc:
         logger.info started_request_message
 
-        if websocket.possible? && allow_request_origin?
-          respond_to_successful_request
-        else
-          respond_to_invalid_request
+        begin
+          connect if respond_to?(:connect)
+          
+          if !websocket.possible? || !allow_request_origin?
+            raise InvalidRequestError
+          end
+        rescue InvalidRequestError
+          return respond_to_invalid_request
+        rescue UnauthorizedError
+          return respond_to_unauthorized_request
         end
+
+        return respond_to_successful_request
       end
 
       # Data received over the WebSocket connection is handled by this method. It's expected that everything inbound is JSON encoded.
@@ -153,9 +163,8 @@ module ActionCable
 
       private
         def handle_open
-          connect if respond_to?(:connect)
           subscribe_to_internal_channel
-          send_welcome_message
+          beat
 
           message_buffer.process!
           server.add_connection(self)
@@ -172,13 +181,6 @@ module ActionCable
           unsubscribe_from_internal_channel
 
           disconnect if respond_to?(:disconnect)
-        end
-
-        def send_welcome_message
-          # Send welcome message to the internal connection monitor channel.
-          # This ensures the connection monitor state is reset after a successful
-          # websocket connection.
-          transmit ActiveSupport::JSON.encode(type: ActionCable::INTERNAL[:message_types][:welcome])
         end
 
         def allow_request_origin?
@@ -202,7 +204,15 @@ module ActionCable
 
           logger.error invalid_request_message
           logger.info finished_request_message
-          [ 404, { 'Content-Type' => 'text/plain' }, [ 'Page not found' ] ]
+          rack_response_not_found
+        end
+
+        def respond_to_unauthorized_request
+          close if websocket.alive?
+
+          logger.error unauthorized_request_message
+          logger.info finished_request_message
+          rack_response_unauthorized
         end
 
         # Tags are declared in the server but computed in the connection. This allows us per-connection tailored tags.
@@ -229,7 +239,13 @@ module ActionCable
         end
 
         def invalid_request_message
-          'Failed to upgrade to WebSocket (REQUEST_METHOD: %s, HTTP_CONNECTION: %s, HTTP_UPGRADE: %s)' % [
+          'Failed to upgrade to WebSocket [Invalid Request] (REQUEST_METHOD: %s, HTTP_CONNECTION: %s, HTTP_UPGRADE: %s)' % [
+            env["REQUEST_METHOD"], env["HTTP_CONNECTION"], env["HTTP_UPGRADE"]
+          ]
+        end
+
+        def unauthorized_request_message
+          'Failed to upgrade to WebSocket [Unauthorized Request] (REQUEST_METHOD: %s, HTTP_CONNECTION: %s, HTTP_UPGRADE: %s)' % [
             env["REQUEST_METHOD"], env["HTTP_CONNECTION"], env["HTTP_UPGRADE"]
           ]
         end
@@ -238,6 +254,14 @@ module ActionCable
           'Successfully upgraded to WebSocket (REQUEST_METHOD: %s, HTTP_CONNECTION: %s, HTTP_UPGRADE: %s)' % [
             env["REQUEST_METHOD"], env["HTTP_CONNECTION"], env["HTTP_UPGRADE"]
           ]
+        end
+
+        def rack_response_not_found
+          [ 404, { 'Content-Type' => 'text/plain' }, [ 'Page not found' ] ]
+        end
+
+        def rack_response_unauthorized
+          [ 401, { 'Content-Type' => 'text/plain' }, [ 'Unauthorized'] ]
         end
     end
   end

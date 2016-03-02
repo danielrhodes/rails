@@ -23,7 +23,11 @@ class ActionCable::Connection::AuthorizationTest < ActionCable::TestCase
         'HTTP_ORIGIN' => 'http://rubyonrails.com'
 
       connection = Connection.new(server, env)
-      connection.websocket.expects(:close)
+
+      connection.websocket.expects(:alive?).returns(false)
+      connection.websocket.alive?
+
+      connection.expects(:respond_to_unauthorized_request).once
 
       connection.process
     end
