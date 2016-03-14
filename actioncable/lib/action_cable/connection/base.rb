@@ -51,6 +51,8 @@ module ActionCable
       attr_reader :server, :env, :subscriptions, :logger, :worker_pool
       delegate :event_loop, :pubsub, to: :server
 
+      STALE_CONNECTION_THRESHOLD = ActionCable::Server::Connections::BEAT_INTERVAL * 3
+
       def initialize(server, env)
         @server, @env = server, env
 
@@ -63,6 +65,8 @@ module ActionCable
 
         @_internal_subscriptions = nil
         @started_at = Time.now
+        @last_pong = Time.now
+        @closed = false
       end
 
       # Called by the server when a new WebSocket connection is established. This configures the callbacks intended for overwriting by the user.
@@ -118,6 +122,16 @@ module ActionCable
         transmit ActiveSupport::JSON.encode(type: ActionCable::INTERNAL[:message_types][:ping], message: Time.now.to_i)
       end
 
+      def ping
+        seconds_since_pong = (Time.now - @last_pong).floor
+        if seconds_since_pong > STALE_CONNECTION_THRESHOLD
+          send_async :handle_stale_connection
+          return
+        end
+
+        websocket.ping { @last_pong = Time.now }
+      end
+
       def on_open # :nodoc:
         send_async :handle_open
       end
@@ -153,6 +167,7 @@ module ActionCable
 
       private
         def handle_open
+          @last_pong = Time.now
           connect if respond_to?(:connect)
           subscribe_to_internal_channel
           send_welcome_message
@@ -164,6 +179,8 @@ module ActionCable
         end
 
         def handle_close
+          return if @closed
+
           logger.info finished_request_message
 
           server.remove_connection(self)
@@ -172,6 +189,21 @@ module ActionCable
           unsubscribe_from_internal_channel
 
           disconnect if respond_to?(:disconnect)
+
+          @closed = true
+        end
+
+        def handle_stale_connection
+          return if @closed
+
+          if !websocket.closing?
+            send_async :close
+          else
+            # At this point, we know the stale websocket is closing
+            # but it's going to take awhile. So let's jump right to
+            # cleaning up. Especially useful for connection flapping.
+            websocket.cleanup
+          end
         end
 
         def send_welcome_message

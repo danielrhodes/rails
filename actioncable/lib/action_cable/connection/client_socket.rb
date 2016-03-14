@@ -83,6 +83,10 @@ module ActionCable
         end
       end
 
+      def ping(string='', &callback)
+        @driver.ping(string, &callback)
+      end
+
       def close(code = nil, reason = nil)
         code   ||= 1000
         reason ||= ''
@@ -97,6 +101,10 @@ module ActionCable
         @driver.close(reason, code)
       end
 
+      def cleanup
+        begin_close("", 1006)
+      end
+
       def parse(data)
         @driver.parse(data)
       end
@@ -107,6 +115,10 @@ module ActionCable
 
       def alive?
         @ready_state == OPEN
+      end
+
+      def closing?
+        @ready_state == CLOSING
       end
 
       private

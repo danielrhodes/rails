@@ -22,7 +22,10 @@ module ActionCable
       # disconnect.
       def setup_heartbeat_timer
         @heartbeat_timer ||= event_loop.timer(BEAT_INTERVAL) do
-          event_loop.post { connections.map(&:beat) }
+          event_loop.post do
+            connections.map(&:beat)
+            connections.map(&:ping)
+          end
         end
       end
 

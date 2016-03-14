@@ -16,12 +16,24 @@ module ActionCable
         websocket && websocket.alive?
       end
 
+      def closing?
+        websocket && websocket.closing?
+      end
+
       def transmit(data)
         websocket.transmit data
       end
 
+      def ping(&callback)
+        websocket.ping('', &callback)
+      end
+
       def close
         websocket.close
+      end
+
+      def cleanup
+        websocket.cleanup
       end
 
       def rack_response

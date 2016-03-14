@@ -17,9 +17,9 @@ module ActionCable
         @stream_send ||= callback
       end
 
-      def close
+      def close(notify_socket=true)
         shutdown
-        @socket_object.client_gone
+        @socket_object.client_gone if notify_socket
       end
 
       def shutdown
@@ -30,7 +30,7 @@ module ActionCable
         return @rack_hijack_io.write(data) if @rack_hijack_io
         return @stream_send.call(data) if @stream_send
       rescue EOFError
-        @socket_object.client_gone
+        close
       end
 
       def receive(data)
