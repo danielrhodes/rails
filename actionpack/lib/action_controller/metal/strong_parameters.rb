@@ -777,6 +777,7 @@ module ActionController
 
       EMPTY_ARRAY = []
       EMPTY_HASH  = {}
+      PERMIT_ALL_VALUE = true
       def hash_filter(params, filter)
         filter = filter.with_indifferent_access
 
@@ -794,6 +795,15 @@ module ActionController
             # Declaration { preferences: {} }.
             if value.is_a?(Parameters)
               params[key] = permit_any_in_parameters(value)
+            end
+          elsif filter[key] === PERMIT_ALL_VALUE
+            # Declaration { preferences: true }
+            if value.is_a?(Parameters)
+              params[key] = permit_any_in_parameters(value)
+            elsif value.is_a?(Array)
+              params[key] = permit_any_in_array(value)
+            elsif permitted_scalar? value
+              params[key] = value
             end
           elsif non_scalar?(value)
             # Declaration { user: :name } or { user: [:name, :age, { address: ... }] }.
